@@ -1,3 +1,0 @@
-[2024/06/14 20:41:37] [ info] [fluent bit] version=3.1.0, commit=5ce9c43bca, pid=27974
-[2024/06/14 20:41:37] [ info] [storage] ver=1.5.2, type=memory, sync=normal, checksum=off, max_chunks_up=128
-[2024/06/14 20:41:37] [ info] [cmetrics] version=0.9.1
