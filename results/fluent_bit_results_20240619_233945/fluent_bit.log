@@ -1,0 +1,7 @@
+[2024/06/19 23:39:45] [ info] [fluent bit] version=3.1.0, commit=5ce9c43bca, pid=10637
+[2024/06/19 23:39:45] [ info] [storage] ver=1.5.2, type=memory, sync=normal, checksum=off, max_chunks_up=128
+[2024/06/19 23:39:45] [ info] [cmetrics] version=0.9.1
+[2024/06/19 23:39:45] [ info] [ctraces ] version=0.5.1
+[2024/06/19 23:39:45] [ info] [input:opentelemetry:opentelemetry.0] initializing
+[2024/06/19 23:39:45] [ info] [input:opentelemetry:opentelemetry.0] storage_strategy='memory' (memory only)
+[2024/06/19 23:39:45] [ info] [input:opentelemetry:opentelemetry.0] listening on 0.0.0.0:45000

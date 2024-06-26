@@ -1,0 +1,11 @@
+[2024/06/19 23:39:19] [ info] [fluent bit] version=3.1.0, commit=5ce9c43bca, pid=10414
+[2024/06/19 23:39:19] [ info] [storage] ver=1.5.2, type=memory, sync=normal, checksum=off, max_chunks_up=128
+[2024/06/19 23:39:19] [ info] [cmetrics] version=0.9.1
+[2024/06/19 23:39:19] [ info] [ctraces ] version=0.5.1
+[2024/06/19 23:39:19] [ info] [input:opentelemetry:opentelemetry.0] initializing
+[2024/06/19 23:39:19] [ info] [input:opentelemetry:opentelemetry.0] storage_strategy='memory' (memory only)
+[2024/06/19 23:39:19] [ info] [input:opentelemetry:opentelemetry.0] listening on 0.0.0.0:45000
+[2024/06/19 23:39:19] [error] [config] content_modifier: unknown configuration property 'val'. The following properties are allowed: context, action, key, value, pattern, and converted_type.
+[2024/06/19 23:39:19] [ help] try the command: fluent-bit -F content_modifier -h
+
+[2024/06/19 23:39:19] [error] [processor] error initializing unit native processor content_modifier

@@ -1,0 +1,2 @@
+fluent_bit_binary: /Users/edsiper/coding/fluent-bit/build/bin/fluent-bit
+config_path: fluent-bit.yaml

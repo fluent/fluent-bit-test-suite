@@ -1,0 +1,12 @@
+[2024/06/14 14:22:49] [ info] [fluent bit] version=3.1.0, commit=5ce9c43bca, pid=15643
+[2024/06/14 14:22:49] [ info] [storage] ver=1.5.2, type=memory, sync=normal, checksum=off, max_chunks_up=128
+[2024/06/14 14:22:49] [ info] [cmetrics] version=0.9.1
+[2024/06/14 14:22:49] [ info] [ctraces ] version=0.5.1
+[2024/06/14 14:22:49] [ info] [input:opentelemetry:opentelemetry.0] initializing
+[2024/06/14 14:22:49] [ info] [input:opentelemetry:opentelemetry.0] storage_strategy='memory' (memory only)
+[2024/06/14 14:22:49] [ info] [input:opentelemetry:opentelemetry.0] listening on 0.0.0.0:4318
+[2024/06/14 14:22:49] [error] [config] opentelemetry: unknown configuration property 'endpoint'. The following properties are allowed: add_label, proxy, http_user, http_passwd, header, metrics_uri, batch_size, compress, logs_uri, logs_body_key, logs_body_key_attributes, traces_uri, log_response_payload, logs_metadata_key, logs_observed_timestamp_metadata_key, logs_timestamp_metadata_key, logs_severity_text_metadata_key, logs_severity_number_metadata_key, logs_trace_flags_metadata_key, logs_span_id_metadata_key, logs_trace_id_metadata_key, logs_attributes_metadata_key, logs_instrumentation_scope_metadata_key, logs_resource_metadata_key, logs_span_id_message_key, logs_trace_id_message_key, logs_severity_text_message_key, and logs_severity_number_message_key.
+[2024/06/14 14:22:49] [ info] [output:stdout:stdout.0] worker #0 started
+[2024/06/14 14:22:49] [ help] try the command: fluent-bit -o opentelemetry -h
+
+[2024/06/14 14:22:49] [ info] [output:stdout:stdout.0] thread worker #0 stopping...

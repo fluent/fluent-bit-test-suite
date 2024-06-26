@@ -1,0 +1,12 @@
+[2024/06/14 20:37:39] [ info] [fluent bit] version=3.1.0, commit=5ce9c43bca, pid=26431
+[2024/06/14 20:37:39] [ info] [storage] ver=1.5.2, type=memory, sync=normal, checksum=off, max_chunks_up=128
+[2024/06/14 20:37:39] [ info] [cmetrics] version=0.9.1
+[2024/06/14 20:37:39] [ info] [ctraces ] version=0.5.1
+[2024/06/14 20:37:39] [ info] [input:opentelemetry:opentelemetry.0] initializing
+[2024/06/14 20:37:39] [ info] [input:opentelemetry:opentelemetry.0] storage_strategy='memory' (memory only)
+[2024/06/14 20:37:39] [ info] [input:opentelemetry:opentelemetry.0] listening on 0.0.0.0:4318
+[2024/06/14 20:37:39] [ info] [output:stdout:stdout.0] worker #0 started
+[2024/06/14 20:37:39] [ info] [http_server] listen iface=0.0.0.0 tcp_port=40000
+[2024/06/14 20:37:39] [ info] [sp] stream processor started
+[2024/06/14 20:37:47] [ info] [output:stdout:stdout.0] thread worker #0 stopping...
+[2024/06/14 20:37:47] [ info] [output:stdout:stdout.0] thread worker #0 stopped
