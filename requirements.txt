@@ -3,6 +3,7 @@ protobuf
 pytest
 pyyaml
 deepdiff
+waitress
 
 # OpenTelemetry Tests
 google==3.0.0
