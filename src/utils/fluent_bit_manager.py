@@ -21,11 +21,21 @@ import requests
 import subprocess
 import logging
 import datetime
+import pytest
 from utils.network import find_available_port
 
 ENV_FLB_HTTP_MONITORING_PORT = "FLUENT_BIT_HTTP_MONITORING_PORT"
 
 logger = logging.getLogger(__name__)
+
+@pytest.fixture
+def run_with_valgrind(request):
+    # Abort the test to check if the fixture is being called
+    pytest.fail("Aborting test to verify fixture is being called")
+    # valgrind_enabled = request.config.getoption("--valgrind")
+    # logger.info(f"run_with_valgrind: {valgrind_enabled}")
+    # return valgrind_enabled
+
 
 class FluentBitManager:
     def __init__(self, config_path=None, binary_path='fluent-bit'):
@@ -56,19 +66,41 @@ class FluentBitManager:
         logger.info(f' path       : {self.binary_absolute_path}')
         logger.info(f" config file: {self.config_path}")
         logger.info(f" logfile    : {log_file}")
-        logger.info(f" http port  : {self.http_monitoring_port} (testing...)")
+        logger.info(f" http port  : {self.http_monitoring_port}")
+
+        command = [
+            self.binary_path,
+            "-c", self.config_path,
+            "-l", log_file
+        ]
+
+        valgrind = os.environ.get('VALGRIND', False)
+        if valgrind:
+            command = [
+                "valgrind",
+                "--log-file=./valgrind.log",
+                "--leak-check=full"
+            ] + command
+
+
+        logger.info(f"Running command {command}")
 
         # spawn the process
-        self.process = subprocess.Popen([self.binary_path, "-c", self.config_path, "-l", log_file])
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logger.info(f"Fluent Bit started (pid: {self.process.pid})")
 
         # wait for Fluent Bit to start
         self.wait_for_fluent_bit()
 
     def stop(self):
+        pid = self.process.pid
+
         if self.process:
             self.process.terminate()
             self.process.wait()
             self.process = None
+
+        logger.info(f"Fluent Bit stopped (pid: {pid})")
 
     def get_version_info(self):
         try:
@@ -91,11 +123,12 @@ class FluentBitManager:
     # the value of `uptime_sec` is greater than 1
     def wait_for_fluent_bit(self, timeout=10):
         url = f"http://127.0.0.1:{self.http_monitoring_port}/api/v1/uptime"
-
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
                 response = requests.get(url)
+                logger.info(f"Fluent Bit health check: {response.status_code}")
+
                 if response.status_code == 200:
                     uptime = response.json().get('uptime_sec', 0)
                     if uptime > 1:
