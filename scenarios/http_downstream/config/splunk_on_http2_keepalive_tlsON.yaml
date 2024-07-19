@@ -6,11 +6,13 @@ service:
 pipeline:
   inputs:
     - name: splunk
-      port: 9883
+      port: ${FLUENT_BIT_TEST_LISTENER_PORT}
       host: 0.0.0.0
-      http2: on
+      http2: off
       net.keepalive: on
-      tls: off
+      tls: on
+      tls.crt_file: ../certificate/certificate.pem
+      tls.key_file: ../certificate/private_key.pem
   outputs:
     - name: stdout
       match: '*'

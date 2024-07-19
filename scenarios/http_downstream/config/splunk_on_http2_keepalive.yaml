@@ -6,10 +6,10 @@ service:
 pipeline:
   inputs:
     - name: splunk
-      port: 9883
+      port: ${FLUENT_BIT_TEST_LISTENER_PORT}
       host: 0.0.0.0
       http2: on
-      net.keepalive: off
+      net.keepalive: on
       tls: off
   outputs:
     - name: stdout
