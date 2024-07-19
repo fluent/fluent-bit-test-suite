@@ -48,7 +48,7 @@ def test_splunk_on_http2_keepalive_tlsON():
     service.stop()
     assert len(output) == 3
 
-    # Verifica los detalles de cada respuesta
+    # Verify response details
     for response in output:
         assert response['status'] == 200
         assert response['reason'] == 'OK'
@@ -62,7 +62,7 @@ def test_splunk_on_http2_Nokeepalive():
     service.stop()
     assert len(output) == 3
 
-    # Verifica los detalles de cada respuesta
+    # Verify response details
     for response in output:
         assert response['status'] == 200
         assert response['reason'] == 'OK'
@@ -78,7 +78,7 @@ def test_splunk_on_http2_keepalive():
     service.stop()
     assert len(output) == 3
 
-    # Verifica los detalles de cada respuesta
+    # Verify response details
     for response in output:
         assert response['status'] == 200
         assert response['reason'] == 'OK'
