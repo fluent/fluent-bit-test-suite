@@ -42,9 +42,9 @@ def send_requests(conn, num_requests, headers, json_payload):
 
 def test_splunk_on_http2_keepalive_tlsON():
     try:
-        service = Service("splunk-on-http2-keepalive-tlsON.yaml")
+        service = Service("splunk_on_http2_keepalive_tlsON.yaml")
         service.start()
-        output = service.run_splunk_TLS('localhost', 9883, '../certificate/certificate.pem', 3)
+        output = service.run_splunk_TLS('localhost', service.flb_listener_port, '../certificate/certificate.pem', 3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
@@ -61,9 +61,9 @@ def test_splunk_on_http2_keepalive_tlsON():
 
 def test_splunk_on_http2_Nokeepalive():
     try:
-        service = Service("splunk-on-http2-Nokeepalive.yaml")
+        service = Service("splunk_on_http2_Nokeepalive.yaml")
         service.start()
-        output = service.run_splunk('localhost', 9883,  3)
+        output = service.run_splunk('localhost', service.flb_listener_port,  3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
@@ -80,9 +80,9 @@ def test_splunk_on_http2_Nokeepalive():
 
 def test_splunk_on_http2_keepalive():
     try:
-        service = Service("splunk-on-http2-keepalive.yaml")
+        service = Service("splunk_on_http2_keepalive.yaml")
         service.start()
-        output = service.run_splunk('localhost', 9883, 3)
+        output = service.run_splunk('localhost', service.flb_listener_port, 3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
@@ -101,9 +101,9 @@ def test_splunk_on_http2_keepalive():
 
 def test_splunk_on_http2ON_keepaliveON_tlsON():
     try:
-        service = Service("splunk-on-http2ON-keepaliveON_tlsON.yaml")
+        service = Service("splunk_on_http2ON_keepaliveON_tlsON.yaml")
         service.start()
-        output = service.run_splunk_TLS('localhost', 9883, '../certificate/certificate.pem', 3)
+        output = service.run_splunk_TLS('localhost', service.flb_listener_port, '../certificate/certificate.pem', 3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
