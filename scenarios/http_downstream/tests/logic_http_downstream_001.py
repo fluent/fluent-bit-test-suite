@@ -40,7 +40,7 @@ def send_requests(conn, num_requests, headers, json_payload):
         })
     return responses
 
-def _test_splunk_on_http2_keepalive_tlsON():
+def test_splunk_on_http2_keepalive_tlsON():
     try:
         service = Service("splunk-on-http2-keepalive-tlsON.yaml")
         service.start()
