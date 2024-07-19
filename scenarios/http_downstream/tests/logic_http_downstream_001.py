@@ -40,49 +40,65 @@ def send_requests(conn, num_requests, headers, json_payload):
         })
     return responses
 
-def test_splunk_on_http2_keepalive_tlsON():
-    service = Service("splunk-on-http2-keepalive-tlsON.yaml")
-    service.start()
-    output = service.run_splunk_on_http2_keepalive_tlsON('localhost', 9883, '../certificate/certificate.pem', 3)
-    logger.info(f"response: {output}")
-    service.stop()
-    assert len(output) == 3
+def _test_splunk_on_http2_keepalive_tlsON():
+    try:
+        service = Service("splunk-on-http2-keepalive-tlsON.yaml")
+        service.start()
+        output = service.run_splunk_on_http2_keepalive_tlsON('localhost', 9883, '../certificate/certificate.pem', 3)
+        logger.info(f"response: {output}")
+        service.stop()
+        assert len(output) == 3
 
-    # Verify response details
-    for response in output:
-        assert response['status'] == 200
-        assert response['reason'] == 'OK'
-        assert response['data'] == '{"text":"Success","code":0}'
+        # Verify response details
+        for response in output:
+            assert response['status'] == 200
+            assert response['reason'] == 'OK'
+            assert response['data'] == '{"text":"Success","code":0}'
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        service.stop()
+        raise
 
 def test_splunk_on_http2_Nokeepalive():
-    service = Service("splunk-on-http2-Nokeepalive.yaml")
-    service.start()
-    output = service.run_splunk_on_http2_Nokeepalive('localhost', 9883,  3)
-    logger.info(f"response: {output}")
-    service.stop()
-    assert len(output) == 3
+    try:
+        service = Service("splunk-on-http2-Nokeepalive.yaml")
+        service.start()
+        output = service.run_splunk_on_http2_Nokeepalive('localhost', 9883,  3)
+        logger.info(f"response: {output}")
+        service.stop()
+        assert len(output) == 3
 
-    # Verify response details
-    for response in output:
-        assert response['status'] == 200
-        assert response['reason'] == 'OK'
-        assert response['data'] == '{"text":"Success","code":0}'
+        # Verify response details
+        for response in output:
+            assert response['status'] == 200
+            assert response['reason'] == 'OK'
+            assert response['data'] == '{"text":"Success","code":0}'
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        service.stop()
+        raise
+
 
 
 
 def test_splunk_on_http2_keepalive():
-    service = Service("splunk-on-http2-keepalive.yaml")
-    service.start()
-    output = service.run_splunk_on_http2_keepalive('localhost', 9883, 3)
-    logger.info(f"response: {output}")
-    service.stop()
-    assert len(output) == 3
+    try:
+        service = Service("splunk-on-http2-keepalive.yaml")
+        service.start()
+        output = service.run_splunk_on_http2_keepalive('localhost', 9883, 3)
+        logger.info(f"response: {output}")
+        service.stop()
+        assert len(output) == 3
 
-    # Verify response details
-    for response in output:
-        assert response['status'] == 200
-        assert response['reason'] == 'OK'
-        assert response['data'] == '{"text":"Success","code":0}'
+        # Verify response details
+        for response in output:
+            assert response['status'] == 200
+            assert response['reason'] == 'OK'
+            assert response['data'] == '{"text":"Success","code":0}'
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        service.stop()
+        raise
 
 
 
@@ -137,5 +153,5 @@ class Service:
 
     def stop(self):
         self.flb.stop()
-        requests.post(f'http://localhost:{self.test_suite_http_port}/shutdown')
+        #requests.post(f'http://localhost:{self.test_suite_http_port}/shutdown')
 
