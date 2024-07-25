@@ -6,7 +6,7 @@ from server.otlp_server import  data_storage
 
 logger = logging.getLogger(__name__)
 
-def create_connection_tlsON(server, port, cafile):
+def create_connection_tls_on(server, port, cafile):
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=cafile)
     return http.client.HTTPSConnection(server, port, context=context)
 
@@ -40,11 +40,11 @@ def send_requests(conn, num_requests, headers, json_payload):
         })
     return responses
 
-def test_splunk_on_http2_keepalive_tlsON():
+def test_splunk_on_http2_keepalive_tls_on():
     try:
-        service = Service("splunk_on_http2_keepalive_tlsON.yaml")
+        service = Service("splunk_on_http2_keepalive_tls_on.yaml")
         service.start()
-        output = service.run_splunk_TLS('localhost', service.flb_listener_port, '../certificate/certificate.pem', 3)
+        output = service.run_splunk_tls('localhost', service.flb_listener_port, '../certificate/certificate.pem', 3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
@@ -59,9 +59,9 @@ def test_splunk_on_http2_keepalive_tlsON():
         service.stop()
         raise
 
-def test_splunk_on_http2_Nokeepalive():
+def test_splunk_on_http2_no_keepalive():
     try:
-        service = Service("splunk_on_http2_Nokeepalive.yaml")
+        service = Service("splunk_on_http2_no_keepalive.yaml")
         service.start()
         output = service.run_splunk('localhost', service.flb_listener_port,  3)
         logger.info(f"response: {output}")
@@ -99,11 +99,11 @@ def test_splunk_on_http2_keepalive():
 
 
 
-def test_splunk_on_http2ON_keepaliveON_tlsON():
+def test_splunk_on_http2_on_keepalive_on_tls_on():
     try:
-        service = Service("splunk_on_http2ON_keepaliveON_tlsON.yaml")
+        service = Service("splunk_on_http2_on_keepalive_on_tls_on.yaml")
         service.start()
-        output = service.run_splunk_TLS('localhost', service.flb_listener_port, '../certificate/certificate.pem', 3)
+        output = service.run_splunk_tls('localhost', service.flb_listener_port, '../certificate/certificate.pem', 3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
@@ -143,8 +143,8 @@ class Service:
         # Start Fluent Bit
         self.flb.start()
 
-    def run_splunk_TLS(self,server, port, cafile, num_requests):
-        conn = create_connection_tlsON(server, port, cafile)
+    def run_splunk_tls(self,server, port, cafile, num_requests):
+        conn = create_connection_tls_on(server, port, cafile)
         headers = create_headers()
         json_payload = create_payload()
         responses = send_requests(conn, num_requests, headers, json_payload)
