@@ -7,7 +7,7 @@ from server.otlp_server import  data_storage
 logger = logging.getLogger(__name__)
 
 # Definition of constant url elastic
-PORT_FAKE_ELASTIC = 9200
+# PORT_FAKE_ELASTIC = 9200
 def create_connection(server, port):
     return http.client.HTTPConnection(server, port)
 
@@ -74,7 +74,7 @@ def test_create_multiple_documents():
     try:
         service = Service("elastic_ingest")
         service.start()
-        output = service.runtest_create_multiple_documents('localhost', PORT_FAKE_ELASTIC,'create_multiple_documents.json')
+        output = service.runtest_create_multiple_documents('localhost', service.flb_listener_port,'create_multiple_documents.json')
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 1
@@ -96,7 +96,7 @@ def test_update_multiple_documents():
     try:
         service = Service("elastic_ingest")
         service.start()
-        output = service.runtest_update_multiple_documents('localhost', PORT_FAKE_ELASTIC,'update_multiple_documents.json')
+        output = service.runtest_update_multiple_documents('localhost', service.flb_listener_port,'update_multiple_documents.json')
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 1
@@ -118,7 +118,7 @@ def test_delete_multiple_documents():
     try:
         service = Service("elastic_ingest")
         service.start()
-        output = service.runtest_delete_multiple_documents('localhost', PORT_FAKE_ELASTIC,'delete_multiple_documents.json')
+        output = service.runtest_delete_multiple_documents('localhost', service.flb_listener_port,'delete_multiple_documents.json')
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 1
@@ -146,7 +146,7 @@ class Service:
         # set a listener port (input plugin) for the config file (note: we use an environment variable
         # so Fluent Bit will replace it in the config once it loads it)
         #self.flb_listener_port = find_available_port(starting_port=45000)
-        self.flb_listener_port = 9200
+        self.flb_listener_port = find_available_port(starting_port=45000)
 
         os.environ['FLUENT_BIT_TEST_LISTENER_PORT'] = str(self.flb_listener_port)
         logger.info(f"Fluent Bit listener port: {self.flb_listener_port}")
