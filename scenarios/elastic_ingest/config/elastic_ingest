@@ -2,12 +2,12 @@
     Flush        1
     Log_Level    info
     HTTP_Server  on
-    HTTP_Port    9350
+    HTTP_Port    ${FLUENT_BIT_HTTP_MONITORING_PORT}
 
 [INPUT]
     Name         elasticsearch
     Listen       0.0.0.0
-    Port         9200
+    Port         ${FLUENT_BIT_TEST_LISTENER_PORT}
 
 [OUTPUT]
     Name         stdout
