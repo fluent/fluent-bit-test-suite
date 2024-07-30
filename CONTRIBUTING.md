@@ -25,7 +25,11 @@ In open source project maintenance, having a clear history is key for us, for he
 - commit prefix
 - commit description
 
-#### Commit Prefix
+#### Commit Prefix and Descriptions
+
+Commit _prefix_ __must not exceed 80__ characters in length. This help to readibility in the GIT log viewers. Make it short and straight to the point.
+
+In _commit description_, make sure each line do not exceed __120 characters__. Here you have more flexibility to write more about the changes, just try to be inside the length limit of each line.
 
 The project have specific components, we enforce that every commit that touches an interface or component be prefixed with that name. As of today we register the following components:
 
@@ -41,7 +45,7 @@ For any code change that is happening inside [scenarios/otlp-to-otlp](https://gi
 scenarios: otlp-to-otlp: description of the change
 ```
 
-Optionally you can add a third component that represents another file interface (without the .py.
+Optionally you can add a third component that represents another file interface (without the extension `.py`) .
 
 __server__
 
@@ -58,6 +62,7 @@ When modifying any of those servers or adding new ones, the commits must be pref
 ```
 server: http: some example descripition
 ```
+
 
 ##### Others
 
