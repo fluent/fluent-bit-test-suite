@@ -11,8 +11,6 @@ pipeline:
       http2: off
       net.keepalive: on
       tls: on
-      #tls.crt_file: ../certificate/certificate.pem
-      #tls.key_file: ../certificate/private_key.pem
       tls.crt_file: ${CERTIFICATE_TEST}
       tls.key_file: ${PRIVATE_KEY_TEST}
   outputs:
