@@ -34,7 +34,7 @@ from utils.fluent_bit_manager import FluentBitManager, ENV_FLB_HTTP_MONITORING_P
 # Add the directory containing http_server.py to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../src/server')))
 
-from otlp_server import otlp_server_run, data_storage
+from server.otlp_server import otlp_server_run, data_storage
 
 logger = logging.getLogger(__name__)
 
