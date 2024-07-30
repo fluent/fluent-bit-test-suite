@@ -64,7 +64,8 @@ def test_create_index():
             assert response['data'] == '{"errors":false,"items":[{"index":{"status":201,"result":"created"}}]}'
     except Exception as e:
         logger.error(f"An error occurred: {e}")
-        service.stop()
+        if service.flb.process is not None:
+            service.stop()
         raise
 
 """
@@ -86,7 +87,8 @@ def test_create_multiple_documents():
             assert response['data'] == '{"errors":false,"items":[{"index":{"status":201,"result":"created"}},{"index":{"status":201,"result":"created"}},{"index":{"status":201,"result":"created"}},{"index":{"status":201,"result":"created"}}]}'
     except Exception as e:
         logger.error(f"An error occurred: {e}")
-        service.stop()
+        if service.flb.process is not None:
+            service.stop()
         raise
 
 """
@@ -108,7 +110,8 @@ def test_update_multiple_documents():
             assert response['data'] == '{"errors":true,"items":[{"delete":{"status":200,"result":"updated"}}]}'
     except Exception as e:
         logger.error(f"An error occurred: {e}")
-        service.stop()
+        if service.flb.process is not None:
+            service.stop()
         raise
 
 """
@@ -119,8 +122,8 @@ def test_delete_multiple_documents():
         service = Service("elastic_ingest")
         service.start()
         output = service.runtest_delete_multiple_documents('localhost', service.flb_listener_port,'delete_multiple_documents.json')
-        logger.info(f"response: {output}")
         service.stop()
+        logger.info(f"response: {output}")
         assert len(output) == 1
 
         # Verify response details
@@ -130,8 +133,11 @@ def test_delete_multiple_documents():
             assert response['data'] == '{"errors":true,"items":[{"update":{"status":200,"result":"deleted"}}]}'
     except Exception as e:
         logger.error(f"An error occurred: {e}")
-        service.stop()
+        if service.flb.process is not None:
+            service.stop()
         raise
+
+
 
 class Service:
     def __init__(self, config_file):
