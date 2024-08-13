@@ -10,7 +10,7 @@ pipeline:
       host: 0.0.0.0
       http2: off
       net.keepalive: on
-      tls: on
+      tls: on¡
       #tls.crt_file: ../certificate/certificate.pem
       #tls.key_file: ../certificate/private_key.pem
       tls.crt_file: ${CERTIFICATE_TEST}
