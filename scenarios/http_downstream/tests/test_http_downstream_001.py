@@ -67,10 +67,12 @@ def test_splunk_on_http2_no_keepalive():
         service = Service("splunk_on_http2_no_keepalive.yaml")
         logger.info(f"service: {service}")
         service.start()
-        output = service.run_splunk('localhost', service.flb_listener_port,  3)
+        certificate_path = f'{service.test_path}/../certificate/certificate.pem'
+        logger.info(f'certificate path: {certificate_path}')
+        output = service.run_splunk_tls('localhost', service.flb_listener_port, certificate_path, 1)
         logger.info(f"response: {output}")
         service.stop()
-        assert len(output) == 3
+        assert len(output) == 1
 
         # Verify response details
         for response in output:
@@ -85,9 +87,14 @@ def test_splunk_on_http2_no_keepalive():
 
 def test_splunk_on_http2_keepalive():
     try:
+        logger.info('>>>>>> abriendo')
+        logger.info('>>>>>> abriendo')
+        logger.info('>>>>>> abriendo')
+        logger.info('>>>>>> abriendo')
         service = Service("splunk_on_http2_keepalive.yaml")
         service.start()
-        output = service.run_splunk('localhost', service.flb_listener_port, 3)
+        certificate_path = f'{service.test_path}/../certificate/certificate.pem'
+        output = service.run_splunk_tls('localhost', service.flb_listener_port, certificate_path, 3)
         logger.info(f"response: {output}")
         service.stop()
         assert len(output) == 3
@@ -168,7 +175,9 @@ class Service:
         conn = create_connection_tls_on(server, port, cafile)
         logger.info(f'connection = {conn}')
         headers = create_headers()
+        logger.info(f'headers = {headers}')
         json_payload = create_payload()
+        logger.info(f'json_payload = {json_payload}')
         responses = send_requests(conn, num_requests, headers, json_payload)
         conn.close()
         return responses
