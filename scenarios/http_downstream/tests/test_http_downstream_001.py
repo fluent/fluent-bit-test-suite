@@ -87,10 +87,6 @@ def test_splunk_on_http2_no_keepalive():
 
 def test_splunk_on_http2_keepalive():
     try:
-        logger.info('>>>>>> abriendo')
-        logger.info('>>>>>> abriendo')
-        logger.info('>>>>>> abriendo')
-        logger.info('>>>>>> abriendo')
         service = Service("splunk_on_http2_keepalive.yaml")
         service.start()
         certificate_path = f'{service.test_path}/../certificate/certificate.pem'
