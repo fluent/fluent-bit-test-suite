@@ -11,6 +11,8 @@ pipeline:
       http2: on
       net.keepalive: on
       tls: on
+      tls.crt_file: ${CERTIFICATE_TEST}
+      tls.key_file: ${PRIVATE_KEY_TEST}
   outputs:
     - name: stdout
       match: '*'

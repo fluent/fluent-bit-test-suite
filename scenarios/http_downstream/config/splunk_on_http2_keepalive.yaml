@@ -10,7 +10,9 @@ pipeline:
       host: 0.0.0.0
       http2: on
       net.keepalive: on
-      tls: off
+      tls: on
+      tls.crt_file: ${CERTIFICATE_TEST}
+      tls.key_file: ${PRIVATE_KEY_TEST}
   outputs:
     - name: stdout
       match: '*'
