@@ -37,12 +37,15 @@ __scenarios__
 
 An scenario defines a main type of pipeline or Fluent Bit component being tested, an example is:
 
-- otlp-otlp: changes applicable to otlp-to-otlp tests
+- in-opentelemetry: changes applicable to OTLP input and OTLP round-trip tests
+- in-splunk: changes applicable to Splunk input protocol tests
+- in-elasticsearch: changes applicable to Elasticsearch input compatibility tests
+- in-http: changes applicable to HTTP input end-to-end tests
 
-For any code change that is happening inside [scenarios/otlp-to-otlp](https://github.com/fluent/fluent-bit-test-suite/tree/main/scenarios/otlp-to-otlp) the commit must be prefixed like this:
+For any code change that is happening inside [scenarios/in_opentelemetry](https://github.com/fluent/fluent-bit-test-suite/tree/main/scenarios/in_opentelemetry) the commit must be prefixed like this:
 
-```
-scenarios: otlp-to-otlp: description of the change
+``` 
+scenarios: in-opentelemetry: description of the change
 ```
 
 Optionally you can add a third component that represents another file interface (without the extension `.py`) .
@@ -62,6 +65,17 @@ When modifying any of those servers or adding new ones, the commits must be pref
 ```
 server: http: some example descripition
 ```
+
+### Naming
+
+Prefer Fluent Bit internal plugin naming in test names and descriptions:
+
+- `in_splunk`
+- `in_elasticsearch`
+- `in_http`
+
+Scenario directory names may be broader for now, but new tests and updated assertions should follow the internal plugin names in function names, docs, and commit prefixes whenever practical.
+Scenario directory names are now expected to follow the internal plugin names for maintained scenarios whenever possible.
 
 
 ##### Others

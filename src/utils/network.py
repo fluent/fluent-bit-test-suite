@@ -15,16 +15,35 @@
 #  limitations under the License.
 
 import socket
+import time
 
-def find_available_port(starting_port=40000):
+def find_available_port(starting_port=0):
+    if starting_port in (None, 0):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 0))
+            return sock.getsockname()[1]
+
     for port in range(starting_port, 65535):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             try:
-                s.bind(('localhost', port))
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.close()
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(("127.0.0.1", port))
                 return port
             except OSError:
                 continue
 
     raise RuntimeError("No available ports found in the specified range")
+
+
+def wait_for_port_to_be_free(port, *, host="127.0.0.1", timeout=5, interval=0.1):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((host, port))
+                return True
+            except OSError:
+                time.sleep(interval)
+    return False
