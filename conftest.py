@@ -14,11 +14,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import pytest
 import os
 import yaml
 import logging
-from src.utils.fluent_bit_manager import FluentBitManager
+import pytest
 
 # Configure logging
 def configure_logging():
@@ -60,7 +59,3 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.hookimpl(trylast=True)
 def pytest_unconfigure(config):
     logger.info("Unconfiguring pytest")
-    for handler in logger.handlers:
-        handler.flush()
-        handler.close()
-    logger.handlers.clear()

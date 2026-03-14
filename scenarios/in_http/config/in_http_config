@@ -9,5 +9,9 @@
     Port         ${FLUENT_BIT_TEST_LISTENER_PORT}
 
 [OUTPUT]
-    Name         stdout
+    Name         http
     Match        *
+    Host         127.0.0.1
+    Port         ${TEST_SUITE_HTTP_PORT}
+    URI          /data
+    Format       json
