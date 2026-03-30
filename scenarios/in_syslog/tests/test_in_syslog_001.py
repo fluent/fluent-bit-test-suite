@@ -22,7 +22,7 @@ class Service:
         cert_dir = os.path.abspath(os.path.join(test_path, "../../in_splunk/certificate"))
         self.tls_crt_file = os.path.join(cert_dir, "certificate.pem")
         self.tls_key_file = os.path.join(cert_dir, "private_key.pem")
-        self.parsers_file = os.path.abspath(os.path.join(test_path, "../../../../../conf/parsers.conf"))
+        self.parsers_file = os.environ.get("FLUENT_BIT_PARSERS_FILE") or os.path.abspath(os.path.join(test_path, "../../../../../conf/parsers.conf"))
         self.socket_path = f"/tmp/fluent_bit_syslog_{uuid.uuid4().hex}.sock"
         self.service = FluentBitTestService(
             self.config_file,
