@@ -5,11 +5,17 @@ import os
 import socket
 
 import requests
+import pytest
 from google.protobuf import json_format
 from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import ExportLogsServiceRequest
 from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import ExportMetricsServiceRequest
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
 
+from server.http_server import (
+    configure_oauth_token_response,
+    data_storage as http_data_storage,
+    http_server_run,
+)
 from server.otlp_server import (
     configure_otlp_grpc_methods,
     data_storage,
@@ -55,7 +61,15 @@ def iter_metric_attributes(output):
 
 
 class Service:
-    def __init__(self, config_file, *, receiver_mode="http", use_tls=False, grpc_methods=None):
+    def __init__(
+        self,
+        config_file,
+        *,
+        receiver_mode="http",
+        use_tls=False,
+        grpc_methods=None,
+        use_oauth_server=False,
+    ):
         self.config_file = _repo_relative("../config", config_file)
         cert_dir = _repo_relative("../../in_splunk/certificate")
         self.tls_crt_file = os.path.join(cert_dir, "certificate.pem")
@@ -63,6 +77,8 @@ class Service:
         self.receiver_mode = receiver_mode
         self.use_tls = use_tls
         self.grpc_methods = grpc_methods or {}
+        self.use_oauth_server = use_oauth_server
+        self.oauth_server_port = None
         self.service = FluentBitTestService(
             self.config_file,
             data_storage=data_storage,
@@ -89,6 +105,15 @@ class Service:
         )
 
     def _start_receiver(self, service):
+        if self.use_oauth_server:
+            self.oauth_server_port = service.allocate_port_env("TEST_SUITE_OAUTH_PORT")
+            http_server_run(self.oauth_server_port)
+            self.service.wait_for_http_endpoint(
+                f"http://127.0.0.1:{self.oauth_server_port}/ping",
+                timeout=10,
+                interval=0.5,
+            )
+
         configure_otlp_grpc_methods(**self.grpc_methods)
         otlp_server_run(
             service.test_suite_http_port,
@@ -124,6 +149,11 @@ class Service:
         )
 
     def _stop_receiver(self, service):
+        if self.oauth_server_port is not None:
+            try:
+                requests.post(f"http://127.0.0.1:{self.oauth_server_port}/shutdown", timeout=2)
+            except requests.RequestException:
+                pass
         stop_otlp_server()
 
     def start(self):
@@ -141,6 +171,14 @@ class Service:
             timeout=timeout,
             interval=0.5,
             description=f"{minimum_count} OTLP requests",
+        )
+
+    def wait_for_oauth_requests(self, minimum_count, timeout=10):
+        return self.service.wait_for_condition(
+            lambda: http_data_storage["requests"] if len(http_data_storage["requests"]) >= minimum_count else None,
+            timeout=timeout,
+            interval=0.5,
+            description=f"{minimum_count} OAuth requests",
         )
 
     def wait_for_signal(self, signal_type, minimum_count=1, timeout=10):
@@ -207,6 +245,86 @@ def test_out_opentelemetry_http_logs_uri_headers_and_basic_auth():
     assert request_seen["headers"]["X-Suite"] == "otel-test"
     assert base64.b64decode(record["traceId"]) == bytes.fromhex("63560bd4d8de74fae7d1e4160f2ee099")
     assert base64.b64decode(record["spanId"]) == bytes.fromhex("251484295a9df731")
+
+
+@pytest.mark.parametrize(
+    "config_file,auth_mode",
+    [
+        ("out_otel_http_logs_oauth2_basic.yaml", "basic"),
+        ("out_otel_http_logs_oauth2_private_key_jwt.yaml", "private_key_jwt"),
+    ],
+    ids=["oauth2_basic", "oauth2_private_key_jwt"],
+)
+def test_out_opentelemetry_http_logs_oauth2_auth_matrix(config_file, auth_mode):
+    service = Service(config_file, use_oauth_server=True)
+    service.start()
+    configure_oauth_token_response(
+        status_code=200,
+        body={"access_token": "oauth-access-token", "token_type": "Bearer", "expires_in": 300},
+    )
+
+    token_requests = service.wait_for_oauth_requests(1)
+    otlp_requests = service.wait_for_requests(1)
+    service.stop()
+
+    token_request = next(request for request in token_requests if request["path"] == "/oauth/token")
+    data_request = next(request for request in otlp_requests if request["path"] == "/custom/logs")
+
+    assert token_request["method"] == "POST"
+    assert "grant_type=client_credentials" in token_request["raw_data"]
+    assert data_request["headers"].get("Authorization") == "Bearer oauth-access-token"
+
+    if auth_mode == "basic":
+        assert "Basic " in token_request["headers"].get("Authorization", "")
+        assert "scope=logs.write" in token_request["raw_data"]
+        return
+
+    assert "client_assertion_type=" in token_request["raw_data"]
+    assert "client_assertion=" in token_request["raw_data"]
+    assert "client_id=client1" in token_request["raw_data"]
+
+
+@pytest.mark.parametrize(
+    "config_file,auth_mode",
+    [
+        ("out_otel_grpc_logs_oauth2_basic.yaml", "basic"),
+        ("out_otel_grpc_logs_oauth2_private_key_jwt.yaml", "private_key_jwt"),
+    ],
+    ids=["grpc_oauth2_basic", "grpc_oauth2_private_key_jwt"],
+)
+def test_out_opentelemetry_grpc_logs_oauth2_auth_matrix(config_file, auth_mode):
+    service = Service(
+        config_file,
+        receiver_mode="grpc",
+        grpc_methods={"logs": "/custom.logs.v1.Logs/Push"},
+        use_oauth_server=True,
+    )
+    service.start()
+    configure_oauth_token_response(
+        status_code=200,
+        body={"access_token": "oauth-access-token", "token_type": "Bearer", "expires_in": 300},
+    )
+
+    token_requests = service.wait_for_oauth_requests(1)
+    otlp_requests = service.wait_for_requests(1)
+    service.stop()
+
+    token_request = next(request for request in token_requests if request["path"] == "/oauth/token")
+    data_request = next(request for request in otlp_requests if request["path"] == "/custom.logs.v1.Logs/Push")
+
+    assert token_request["method"] == "POST"
+    assert "grant_type=client_credentials" in token_request["raw_data"]
+    assert data_request["transport"] == "grpc"
+    assert data_request["headers"].get("authorization") == "Bearer oauth-access-token"
+
+    if auth_mode == "basic":
+        assert "Basic " in token_request["headers"].get("Authorization", "")
+        assert "scope=logs.write" in token_request["raw_data"]
+        return
+
+    assert "client_assertion_type=" in token_request["raw_data"]
+    assert "client_assertion=" in token_request["raw_data"]
+    assert "client_id=client1" in token_request["raw_data"]
 
 
 def test_out_opentelemetry_gzip_and_logs_body_key_attributes():

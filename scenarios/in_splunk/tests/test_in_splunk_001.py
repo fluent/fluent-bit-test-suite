@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 import pytest
 import requests
@@ -30,6 +31,16 @@ class Service:
         self.service.start()
         self.flb = self.service.flb
         self.flb_listener_port = self.service.flb_listener_port
+
+    def wait_for_log_message(self, pattern, timeout=10, interval=0.25):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.flb and self.flb.log_file and os.path.exists(self.flb.log_file):
+                with open(self.flb.log_file, "r", encoding="utf-8", errors="replace") as log_file:
+                    if pattern in log_file.read():
+                        return True
+            time.sleep(interval)
+        raise TimeoutError(f"Timed out waiting for log pattern: {pattern}")
 
     def stop(self):
         self.service.stop()
@@ -88,17 +99,28 @@ def create_splunk_headers(content_type="application/json"):
 
 
 SPLUNK_PROTOCOL_CONFIGS = {
-    "http1_cleartext": "splunk_http1_keepalive.yaml",
-    "http2_cleartext": "splunk_on_http2_keepalive.yaml",
-    "http1_tls": "splunk_http1_tls_keepalive.yaml",
-    "http2_tls": "splunk_on_http2_on_keepalive_on_tls_on.yaml",
+    False: {
+        "http1_cleartext": "splunk_http1_keepalive.yaml",
+        "http2_cleartext": "splunk_on_http2_keepalive.yaml",
+        "http1_tls": "splunk_http1_tls_keepalive.yaml",
+        "http2_tls": "splunk_on_http2_on_keepalive_on_tls_on.yaml",
+    },
+    True: {
+        "http1_cleartext": "splunk_http1_keepalive_workers.yaml",
+        "http2_cleartext": "splunk_on_http2_keepalive_workers.yaml",
+        "http1_tls": "splunk_http1_tls_keepalive_workers.yaml",
+        "http2_tls": "splunk_on_http2_on_keepalive_on_tls_on_workers.yaml",
+    },
 }
 
 
+@pytest.mark.parametrize("workers_enabled", [False, True], ids=["single_listener", "workers_4"])
 @pytest.mark.parametrize("case", PROTOCOL_CASES, ids=[case["id"] for case in PROTOCOL_CASES])
-def test_splunk_protocol_matrix(case):
-    service = Service(SPLUNK_PROTOCOL_CONFIGS[case["config_key"]])
+def test_splunk_protocol_matrix(case, workers_enabled):
+    service = Service(SPLUNK_PROTOCOL_CONFIGS[workers_enabled][case["config_key"]])
     service.start()
+    if workers_enabled:
+        service.wait_for_log_message("with 4 workers", timeout=10)
 
     scheme = "https" if case["use_tls"] else "http"
     url = f"{scheme}://localhost:{service.flb_listener_port}/services/collector"
