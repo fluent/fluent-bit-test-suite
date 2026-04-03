@@ -1,3 +1,5 @@
+__NOTE__: This project has been moved in [fluent/fluent-bit/tests/integration](https://github.com/fluent/fluent-bit/tree/master/tests/integration), so this repo is no longer active.
+
 # Fluent Bit Python Integration Test Suite
 
 ## Status In Fluent Bit
