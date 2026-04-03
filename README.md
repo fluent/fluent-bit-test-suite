@@ -141,6 +141,21 @@ That makes it useful both for plugin development and for runtime regression test
 
 - Splunk-oriented downstream capture helper
 
+[`src/server/forward_server.py`](src/server/forward_server.py)
+
+- Forward protocol receiver for end-to-end input and output validation
+- captures message mode and packed-forward payloads, chunk metadata, and signal options
+
+[`src/server/kafka_server.py`](src/server/kafka_server.py)
+
+- minimal Kafka-compatible server for output plugin validation
+- captures produced records, keys, topics, and payload encodings
+
+[`src/server/s3_server.py`](src/server/s3_server.py)
+
+- fake S3-compatible HTTP receiver for `out_s3`
+- captures PUT requests, object paths, headers, and uploaded payloads
+
 ## Data Flow
 
 ### Input plugin tests
@@ -251,11 +266,17 @@ This lets the suite validate not only payload handling, but also the transport b
 The suite currently exercises:
 
 - HTTP input plugins
+- Forward input behavior
+- MQTT input behavior
 - OTLP input and output paths
 - Splunk HEC input behavior
 - Elasticsearch-compatible input behavior
 - syslog ingestion over TCP, TLS, UDP, and Unix sockets
 - Prometheus remote write ingestion
+- Kafka output behavior
+- S3 output behavior
+- stdout output behavior
+- Azure Logs Ingestion output behavior
 - Prometheus and Vivo exporters
 - internal HTTP server endpoints
 - connection limiting behavior
@@ -290,7 +311,25 @@ Covers:
 - root and `/_nodes/http` endpoints
 - bulk create, update, and delete operations
 - HTTP transport matrix
+- worker and small-buffer variants
 - invalid bulk request handling
+
+### `in_forward`
+
+Path: [`scenarios/in_forward`](scenarios/in_forward)
+
+Entry point: [`scenarios/in_forward/tests/test_in_forward_001.py`](scenarios/in_forward/tests/test_in_forward_001.py)
+
+Covers:
+
+- forward message mode and packed-forward mode
+- gzip and zstd packed-forward payloads
+- chunk acknowledgements and metadata
+- tag rewriting and forced-tag behavior
+- Unix socket transport
+- TLS and secure-forward authentication
+- end-to-end forwarding into a local forward receiver
+- storage-limit behavior where supported by the current binary
 
 ### `in_opentelemetry`
 
@@ -345,6 +384,19 @@ Covers:
 - `http_server.max_connections`
 - deterministic block and recovery behavior
 
+### `in_mqtt`
+
+Path: [`scenarios/in_mqtt`](scenarios/in_mqtt)
+
+Entry point: [`scenarios/in_mqtt/tests/test_in_mqtt_001.py`](scenarios/in_mqtt/tests/test_in_mqtt_001.py)
+
+Covers:
+
+- valid MQTT publish ingestion
+- truncated and malformed publish recovery
+- invalid topic-length handling
+- payload wrapping via `payload_key`
+
 ### `in_syslog`
 
 Path: [`scenarios/in_syslog`](scenarios/in_syslog)
@@ -385,6 +437,31 @@ Covers:
 - OAuth2 client credentials
 - OAuth2 private key JWT
 
+### `out_azure_logs_ingestion`
+
+Path: [`scenarios/out_azure_logs_ingestion`](scenarios/out_azure_logs_ingestion)
+
+Entry point: [`scenarios/out_azure_logs_ingestion/tests/test_out_azure_logs_ingestion_001.py`](scenarios/out_azure_logs_ingestion/tests/test_out_azure_logs_ingestion_001.py)
+
+Covers:
+
+- Azure Logs Ingestion delivery with OAuth2
+- token and data-plane request validation
+
+### `out_kafka`
+
+Path: [`scenarios/out_kafka`](scenarios/out_kafka)
+
+Entry point: [`scenarios/out_kafka/tests/test_out_kafka_001.py`](scenarios/out_kafka/tests/test_out_kafka_001.py)
+
+Covers:
+
+- JSON, raw, and msgpack output
+- dynamic topic routing
+- message-key mapping
+- OTLP JSON and OTLP protobuf output for logs, metrics, and traces
+- multi-resource preservation checks
+
 ### `out_opentelemetry`
 
 Path: [`scenarios/out_opentelemetry`](scenarios/out_opentelemetry)
@@ -396,6 +473,8 @@ Covers:
 - OTLP logs, metrics, and traces output
 - HTTP and gRPC transport
 - custom HTTP and gRPC URIs
+- OAuth2 client credentials
+- OAuth2 private key JWT
 - TLS verification and vhost/SNI behavior
 - custom headers and basic auth
 - gzip and zstd compression
@@ -418,6 +497,32 @@ Covers:
 - scrapeable `/metrics`
 - selected HTTP/2 access
 
+### `out_s3`
+
+Path: [`scenarios/out_s3`](scenarios/out_s3)
+
+Entry point: [`scenarios/out_s3/tests/test_out_s3_001.py`](scenarios/out_s3/tests/test_out_s3_001.py)
+
+Covers:
+
+- `use_put_object` uploads
+- JSON-lines payload delivery
+- gzip-compressed uploads
+- newer S3 output formats when supported by the current binary
+
+### `out_stdout`
+
+Path: [`scenarios/out_stdout`](scenarios/out_stdout)
+
+Entry point: [`scenarios/out_stdout/tests/test_out_stdout_001.py`](scenarios/out_stdout/tests/test_out_stdout_001.py)
+
+Covers:
+
+- default stdout formatting
+- JSON-lines formatting
+- metrics and traces text output
+- OTLP JSON ingestion paths rendered to stdout
+
 ### `out_vivo_exporter`
 
 Path: [`scenarios/out_vivo_exporter`](scenarios/out_vivo_exporter)
@@ -432,7 +537,13 @@ Covers:
 
 ## Running
 
-Run the full suite:
+Run the full suite with the wrapper:
+
+```bash
+./tests/fluent-bit-test-suite/run_tests.py
+```
+
+Run the full suite with raw pytest:
 
 ```bash
 ./tests/fluent-bit-test-suite/.venv/bin/pytest -q tests/fluent-bit-test-suite
