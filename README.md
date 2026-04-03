@@ -1,5 +1,26 @@
 # Fluent Bit Python Integration Test Suite
 
+## Status In Fluent Bit
+
+This suite is included under `tests/fluent-bit-test-suite` as an in-tree developer test harness.
+
+It is intended for local development, plugin validation, and focused regression work.
+
+It is not wired into the default Fluent Bit CMake test targets, `ctest`, or the default GitHub Actions workflows in this repository.
+
+## Quick Start
+
+From the repository root:
+
+```bash
+cd tests/fluent-bit-test-suite
+./setup-venv.sh
+./run_tests.py --list
+./run_tests.py
+```
+
+By default the suite looks for `build/bin/fluent-bit`. You can override that with `FLUENT_BIT_BINARY=/path/to/fluent-bit`.
+
 ## What This Is
 
 This is a binary-level integration test harness for Fluent Bit.
@@ -415,6 +436,24 @@ Run the full suite:
 
 ```bash
 ./tests/fluent-bit-test-suite/.venv/bin/pytest -q tests/fluent-bit-test-suite
+```
+
+List tests with the local wrapper:
+
+```bash
+./tests/fluent-bit-test-suite/run_tests.py --list
+```
+
+Run tests with a simple checkbox progress view:
+
+```bash
+./tests/fluent-bit-test-suite/run_tests.py
+```
+
+Run a subset:
+
+```bash
+./tests/fluent-bit-test-suite/run_tests.py scenarios/in_opentelemetry -k oauth2
 ```
 
 Run against a different binary:
