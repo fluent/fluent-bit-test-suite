@@ -20,13 +20,17 @@ import logging
 import time
 import base64
 from concurrent.futures import ThreadPoolExecutor
+import grpc
 import requests
 import pytest
 
 # OTel imports to convert from JSON to OTLP Protobuf
 from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import ExportLogsServiceRequest
+from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import ExportLogsServiceResponse
 from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import ExportMetricsServiceRequest
+from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import ExportMetricsServiceResponse
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceResponse
 from google.protobuf import json_format
 
 # local imports
@@ -34,9 +38,15 @@ from utils.data_utils import read_json_file
 from utils.http_matrix import PROTOCOL_CASES, run_curl_request
 from utils.test_service import FluentBitTestService
 
+from server.http_server import http_server_run
 from server.otlp_server import configure_otlp_response, otlp_server_run, data_storage
 
 logger = logging.getLogger(__name__)
+MOCK_VALID_JWT = (
+    "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3QiLCJ0eXAiOiJKV1QifQ."
+    "eyJleHAiOjE4OTM0NTYwMDAsImlzcyI6Imlzc3VlciIsImF1ZCI6ImF1ZGllbmNlIiwiYXpwIjoiY2xpZW50MSJ9."
+    "TqWs06LUpQa0FGLejnOkWAD6v562d5CUh2NwsJ7iAuae9-WNFBKU6mP1zAaoafla6o5npee7RfbSzZNFI4PKhqAj69789JjAYV7IW-GSuMwJejHdVOWmCc5lmcZPH0EVxEkHA6lFQxYQwDCrfQ8Sd4Q3vYCV6sLPENcuNpQi9ytjVjaZs_7ONH2oA-sZ7EUchqJJoIBPfjit2yYsq9NeemxCzYMtngiC-IX12eEfaQ1cVYPIjhhN_NaMvapznp-BW4gnXkNoAZ1S-p1axWWY-6UgRdMYOr0Hy5PHQ9fCuHJ6Z-blYdtuGavCUGHK5ghX-JdH1WJ51F89992dQ5yF_w"
+)
 
 IN_OPENTELEMETRY_PROTOCOL_CONFIGS = {
     "http1_cleartext": "otlp_http1_cleartext.yaml",
@@ -51,6 +61,26 @@ IN_OPENTELEMETRY_WORKER_PROTOCOL_CONFIGS = {
     "http1_tls": "otlp_http1_tls_workers.yaml",
     "http2_tls": "otlp_http2_tls_workers.yaml",
 }
+
+IN_OPENTELEMETRY_OAUTH2_PROTOCOL_CONFIGS = {
+    "http1_cleartext": "otlp_http1_cleartext_oauth2.yaml",
+    "http2_cleartext": "otlp_http2_cleartext_oauth2.yaml",
+    "http1_tls": "otlp_http1_tls_oauth2.yaml",
+    "http2_tls": "otlp_http2_tls_oauth2.yaml",
+}
+
+IN_OPENTELEMETRY_GRPC_OAUTH2_CASES = [
+    {
+        "id": "grpc_cleartext",
+        "config_file": "otlp_http2_cleartext_oauth2.yaml",
+        "use_tls": False,
+    },
+    {
+        "id": "grpc_tls",
+        "config_file": "otlp_http2_tls_oauth2.yaml",
+        "use_tls": True,
+    },
+]
 
 #  [Fluent Bit Test Suite]
 #    - Start Fluent Bit:
@@ -133,14 +163,78 @@ def iter_spans(output):
                     "span_attributes": span_attributes,
                 }
 
+
+def read_stdout_otlp_json(service, root_key, timeout=10, interval=0.25):
+    deadline = time.time() + timeout
+    decoder = json.JSONDecoder()
+
+    while time.time() < deadline:
+        if service.flb and service.flb.log_file and os.path.exists(service.flb.log_file):
+            with open(service.flb.log_file, "r", encoding="utf-8", errors="replace") as log_file:
+                content = log_file.read()
+
+            matches = []
+
+            for offset, character in enumerate(content):
+                if character != "{":
+                    continue
+
+                try:
+                    payload, _ = decoder.raw_decode(content[offset:])
+                except json.JSONDecodeError:
+                    continue
+
+                if isinstance(payload, dict) and root_key in payload:
+                    matches.append(payload)
+
+            if matches:
+                return matches[-1]
+
+        time.sleep(interval)
+
+    raise TimeoutError(f"Timed out waiting for stdout OTLP JSON payload with root key {root_key}")
+
+
+def read_stdout_otlp_json_text(service, root_key, timeout=10, interval=0.25):
+    deadline = time.time() + timeout
+    decoder = json.JSONDecoder()
+
+    while time.time() < deadline:
+        if service.flb and service.flb.log_file and os.path.exists(service.flb.log_file):
+            with open(service.flb.log_file, "r", encoding="utf-8", errors="replace") as log_file:
+                content = log_file.read()
+
+            matches = []
+
+            for offset, character in enumerate(content):
+                if character != "{":
+                    continue
+
+                try:
+                    payload, end = decoder.raw_decode(content[offset:])
+                except json.JSONDecodeError:
+                    continue
+
+                if isinstance(payload, dict) and root_key in payload:
+                    matches.append(content[offset:offset + end])
+
+            if matches:
+                return matches[-1]
+
+        time.sleep(interval)
+
+    raise TimeoutError(f"Timed out waiting for stdout OTLP JSON payload with root key {root_key}")
+
 class Service:
-    def __init__(self, config_file):
+    def __init__(self, config_file, *, use_auth_server=False):
         # Compose the absolute path for the Fluent Bit configuration file
         self.config_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/', config_file))
         test_path = os.path.dirname(os.path.abspath(__file__))
         cert_dir = os.path.abspath(os.path.join(test_path, "../../in_splunk/certificate"))
         self.tls_crt_file = os.path.join(cert_dir, "certificate.pem")
         self.tls_key_file = os.path.join(cert_dir, "private_key.pem")
+        self.use_auth_server = use_auth_server
+        self.auth_server_port = None
         self.service = FluentBitTestService(
             self.config_file,
             data_storage=data_storage,
@@ -154,11 +248,24 @@ class Service:
         )
 
     def _start_receiver(self, service):
+        if self.use_auth_server:
+            self.auth_server_port = service.allocate_port_env("TEST_SUITE_JWKS_PORT")
+            http_server_run(self.auth_server_port)
+            self.service.wait_for_http_endpoint(
+                f"http://127.0.0.1:{self.auth_server_port}/ping",
+                timeout=10,
+                interval=0.5,
+            )
         otlp_server_run(service.test_suite_http_port)
         url = f'http://127.0.0.1:{service.test_suite_http_port}/ping'
         self.service.wait_for_http_endpoint(url, timeout=10, interval=0.5)
 
     def _stop_receiver(self, service):
+        if self.auth_server_port is not None:
+            try:
+                requests.post(f"http://127.0.0.1:{self.auth_server_port}/shutdown", timeout=2)
+            except requests.RequestException:
+                pass
         try:
             requests.post(f'http://localhost:{service.test_suite_http_port}/shutdown', timeout=2)
         except requests.RequestException:
@@ -227,6 +334,49 @@ class Service:
         self.send_request(endpoint, protobuf_payload)
 
         return self.read_response(signal_type)
+
+    def send_grpc_request(self, signal_type, payload, *, authorization=None, use_tls=False):
+        method_map = {
+            "logs": (
+                "/opentelemetry.proto.collector.logs.v1.LogsService/Export",
+                ExportLogsServiceRequest.SerializeToString,
+                ExportLogsServiceResponse.FromString,
+            ),
+            "metrics": (
+                "/opentelemetry.proto.collector.metrics.v1.MetricsService/Export",
+                ExportMetricsServiceRequest.SerializeToString,
+                ExportMetricsServiceResponse.FromString,
+            ),
+            "traces": (
+                "/opentelemetry.proto.collector.trace.v1.TraceService/Export",
+                ExportTraceServiceRequest.SerializeToString,
+                ExportTraceServiceResponse.FromString,
+            ),
+        }
+        method_path, serializer, deserializer = method_map[signal_type]
+        target = f"127.0.0.1:{self.flb_listener_port}"
+
+        if use_tls:
+            with open(self.tls_crt_file, "rb") as certificate_file:
+                channel_credentials = grpc.ssl_channel_credentials(certificate_file.read())
+            channel = grpc.secure_channel(target, channel_credentials)
+        else:
+            channel = grpc.insecure_channel(target)
+
+        metadata = []
+        if authorization is not None:
+            metadata.append(("authorization", authorization))
+
+        try:
+            grpc.channel_ready_future(channel).result(timeout=5)
+            rpc = channel.unary_unary(
+                method_path,
+                request_serializer=serializer,
+                response_deserializer=deserializer,
+            )
+            return rpc(payload, metadata=metadata, timeout=5)
+        finally:
+            channel.close()
 
     def build_otel_payload(self, json_input, signal_type):
         base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../tests', 'data_files'))
@@ -432,6 +582,226 @@ def test_in_opentelemetry_rejects_invalid_traces_payload():
 
     assert response.status_code >= 400
     assert len(data_storage["traces"]) == 0
+
+
+def test_in_opentelemetry_stdout_otlp_json_logs():
+    service = Service("003-stdout-otlp-json.yaml")
+    service.start()
+
+    payload = service.build_otel_payload("test_logs_001.in.json", "logs")
+    response = service.send_raw_request("/v1/logs", payload)
+    assert 200 <= response.status_code < 300
+
+    output = read_stdout_otlp_json(service, "resourceLogs")
+    service.stop()
+
+    records = list(iter_log_records(output))
+    assert len(records) >= 2
+    assert records[0]["record"]["severityText"] == "INFO"
+    assert records[0]["record"]["timeUnixNano"] == "1650917400000000000"
+    assert records[0]["resource_attributes"]["service.name"] == "example-service"
+
+
+def test_in_opentelemetry_stdout_otlp_json_metrics():
+    service = Service("003-stdout-otlp-json.yaml")
+    service.start()
+
+    payload = service.build_otel_payload("test_metrics_001.in.json", "metrics")
+    response = service.send_raw_request("/v1/metrics", payload)
+    assert 200 <= response.status_code < 300
+
+    output = read_stdout_otlp_json(service, "resourceMetrics")
+    service.stop()
+
+    metric_entry = list(iter_metric_entries(output))[0]
+    metric = metric_entry["metric"]
+
+    assert metric["name"] == "requests_total"
+    assert metric["sum"]["dataPoints"][0]["asInt"] == "42"
+    assert metric_entry["resource_attributes"]["service.instance.id"] == "instance-1"
+    assert metric["sum"]["dataPoints"][0]["attributes"][0]["key"] == "service.name"
+    assert metric["sum"]["dataPoints"][0]["attributes"][0]["value"]["stringValue"] == "checkout"
+
+
+def test_in_opentelemetry_stdout_otlp_json_traces():
+    service = Service("003-stdout-otlp-json.yaml")
+    service.start()
+
+    payload = service.build_otel_payload("test_traces_001.in.json", "traces")
+    response = service.send_raw_request("/v1/traces", payload)
+    assert 200 <= response.status_code < 300
+
+    output = read_stdout_otlp_json(service, "resourceSpans")
+    service.stop()
+
+    span_entry = list(iter_spans(output))[0]
+    span = span_entry["span"]
+
+    assert span["name"] == "checkout-span"
+    assert span["traceId"] == "e5bf1e7df7fbf7cd37f35d37776ebd6fadf7f35ddf73ad1c"
+    assert span["spanId"] == "79e7b5f5bede7377356f5ef8"
+    assert span_entry["resource_attributes"]["service.name"] == "checkout"
+
+
+def test_in_opentelemetry_stdout_otlp_json_pretty_logs():
+    service = Service("004-stdout-otlp-json-pretty.yaml")
+    service.start()
+
+    payload = service.build_otel_payload("test_logs_001.in.json", "logs")
+    response = service.send_raw_request("/v1/logs", payload)
+    assert 200 <= response.status_code < 300
+
+    output = read_stdout_otlp_json(service, "resourceLogs")
+    output_text = read_stdout_otlp_json_text(service, "resourceLogs")
+    service.stop()
+
+    records = list(iter_log_records(output))
+    assert len(records) >= 2
+    assert records[0]["record"]["severityText"] == "INFO"
+    assert "\n  \"resourceLogs\": [" in output_text
+    assert "\n          \"logRecords\": [" in output_text
+
+
+def test_in_opentelemetry_stdout_otlp_json_pretty_metrics():
+    service = Service("004-stdout-otlp-json-pretty.yaml")
+    service.start()
+
+    payload = service.build_otel_payload("test_metrics_001.in.json", "metrics")
+    response = service.send_raw_request("/v1/metrics", payload)
+    assert 200 <= response.status_code < 300
+
+    output = read_stdout_otlp_json(service, "resourceMetrics")
+    output_text = read_stdout_otlp_json_text(service, "resourceMetrics")
+    service.stop()
+
+    metric_entry = list(iter_metric_entries(output))[0]
+    assert metric_entry["metric"]["name"] == "requests_total"
+    assert "\n  \"resourceMetrics\": [" in output_text
+    assert "\n          \"metrics\": [" in output_text
+
+
+def test_in_opentelemetry_stdout_otlp_json_pretty_traces():
+    service = Service("004-stdout-otlp-json-pretty.yaml")
+    service.start()
+
+    payload = service.build_otel_payload("test_traces_001.in.json", "traces")
+    response = service.send_raw_request("/v1/traces", payload)
+    assert 200 <= response.status_code < 300
+
+    output = read_stdout_otlp_json(service, "resourceSpans")
+    output_text = read_stdout_otlp_json_text(service, "resourceSpans")
+    service.stop()
+
+    span_entry = list(iter_spans(output))[0]
+    assert span_entry["span"]["name"] == "checkout-span"
+    assert "\n  \"resourceSpans\": [" in output_text
+    assert "\n          \"spans\": [" in output_text
+
+
+@pytest.mark.parametrize("case", PROTOCOL_CASES, ids=[case["id"] for case in PROTOCOL_CASES])
+def test_in_opentelemetry_oauth2_requires_bearer_token(case):
+    service = Service(
+        IN_OPENTELEMETRY_OAUTH2_PROTOCOL_CONFIGS[case["config_key"]],
+        use_auth_server=True,
+    )
+    service.start()
+
+    scheme = "https" if case["use_tls"] else "http"
+    payload = service.build_otel_payload("test_logs_001.in.json", "logs")
+    result = run_curl_request(
+        f"{scheme}://localhost:{service.flb_listener_port}/v1/logs",
+        payload,
+        headers=["Content-Type: application/x-protobuf"],
+        http_mode=case["http_mode"],
+        ca_cert_path=service.tls_crt_file if case["use_tls"] else None,
+    )
+
+    service.stop()
+
+    assert result["status_code"] == 401
+    assert len(data_storage["logs"]) == 0
+
+
+@pytest.mark.parametrize("case", PROTOCOL_CASES, ids=[case["id"] for case in PROTOCOL_CASES])
+def test_in_opentelemetry_oauth2_accepts_valid_jwt(case):
+    service = Service(
+        IN_OPENTELEMETRY_OAUTH2_PROTOCOL_CONFIGS[case["config_key"]],
+        use_auth_server=True,
+    )
+    service.start()
+
+    scheme = "https" if case["use_tls"] else "http"
+    payload = service.build_otel_payload("test_logs_001.in.json", "logs")
+    result = run_curl_request(
+        f"{scheme}://localhost:{service.flb_listener_port}/v1/logs",
+        payload,
+        headers=[
+            "Content-Type: application/x-protobuf",
+            f"Authorization: Bearer {MOCK_VALID_JWT}",
+        ],
+        http_mode=case["http_mode"],
+        ca_cert_path=service.tls_crt_file if case["use_tls"] else None,
+    )
+    response_payload = service.read_response("logs")
+
+    service.stop()
+
+    assert result["status_code"] == 201
+    assert result["http_version"] == case["expected_http_version"]
+    assert len(response_payload["resourceLogs"]) > 0
+
+
+@pytest.mark.parametrize("case", IN_OPENTELEMETRY_GRPC_OAUTH2_CASES, ids=[case["id"] for case in IN_OPENTELEMETRY_GRPC_OAUTH2_CASES])
+def test_in_opentelemetry_grpc_oauth2_requires_bearer_token(case):
+    service = Service(case["config_file"], use_auth_server=True)
+    service.start()
+
+    payload = json_format.Parse(
+        json.dumps(
+            read_json_file(
+                os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "../tests/data_files/test_logs_001.in.json")
+                )
+            )
+        ),
+        ExportLogsServiceRequest(),
+    )
+
+    with pytest.raises(grpc.RpcError) as exc_info:
+        service.send_grpc_request("logs", payload, use_tls=case["use_tls"])
+
+    service.stop()
+
+    assert exc_info.value.code() == grpc.StatusCode.UNAUTHENTICATED
+    assert len(data_storage["logs"]) == 0
+
+
+@pytest.mark.parametrize("case", IN_OPENTELEMETRY_GRPC_OAUTH2_CASES, ids=[case["id"] for case in IN_OPENTELEMETRY_GRPC_OAUTH2_CASES])
+def test_in_opentelemetry_grpc_oauth2_accepts_valid_jwt(case):
+    service = Service(case["config_file"], use_auth_server=True)
+    service.start()
+
+    payload = json_format.Parse(
+        json.dumps(
+            read_json_file(
+                os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "../tests/data_files/test_logs_001.in.json")
+                )
+            )
+        ),
+        ExportLogsServiceRequest(),
+    )
+    service.send_grpc_request(
+        "logs",
+        payload,
+        authorization=f"Bearer {MOCK_VALID_JWT}",
+        use_tls=case["use_tls"],
+    )
+    response_payload = service.read_response("logs")
+
+    service.stop()
+
+    assert len(response_payload["resourceLogs"]) > 0
 
 
 def test_out_opentelemetry_receiver_error_is_observable():
