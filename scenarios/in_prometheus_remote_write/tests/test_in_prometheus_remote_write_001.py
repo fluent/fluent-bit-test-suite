@@ -10,22 +10,34 @@ from utils.network import find_available_port
 PROM_RW_CASES = [
     {
         "id": "http1_cleartext",
-        "receiver_config": "receiver_http1_cleartext.yaml",
+        "receiver_config": {
+            False: "receiver_http1_cleartext.yaml",
+            True: "receiver_http1_cleartext_workers.yaml",
+        },
         "sender_config": "sender_cleartext.yaml",
     },
     {
         "id": "http2_cleartext",
-        "receiver_config": "receiver_http2_cleartext.yaml",
+        "receiver_config": {
+            False: "receiver_http2_cleartext.yaml",
+            True: "receiver_http2_cleartext_workers.yaml",
+        },
         "sender_config": "sender_cleartext.yaml",
     },
     {
         "id": "http1_tls",
-        "receiver_config": "receiver_http1_tls.yaml",
+        "receiver_config": {
+            False: "receiver_http1_tls.yaml",
+            True: "receiver_http1_tls_workers.yaml",
+        },
         "sender_config": "sender_tls.yaml",
     },
     {
         "id": "http2_tls",
-        "receiver_config": "receiver_http2_tls.yaml",
+        "receiver_config": {
+            False: "receiver_http2_tls.yaml",
+            True: "receiver_http2_tls_workers.yaml",
+        },
         "sender_config": "sender_tls.yaml",
     },
 ]
@@ -92,12 +104,20 @@ class Service:
         raise TimeoutError(f"Timed out waiting for {pattern} in {path}")
 
 
+@pytest.mark.parametrize("workers_enabled", [False, True], ids=["single_listener", "workers_4"])
 @pytest.mark.parametrize("case", PROM_RW_CASES, ids=[case["id"] for case in PROM_RW_CASES])
-def test_in_prometheus_remote_write_matrix(case):
-    service = Service(case["receiver_config"], case["sender_config"])
+def test_in_prometheus_remote_write_matrix(case, workers_enabled):
+    service = Service(case["receiver_config"][workers_enabled], case["sender_config"])
     service.start()
 
     try:
+        if workers_enabled:
+            service.wait_for_log(
+                service.receiver.log_file,
+                "with 4 workers",
+                timeout=20,
+                interval=0.5,
+            )
         receiver_log = service.wait_for_log(
             service.receiver.log_file,
             "fluentbit_input_metrics_scrapes_total",

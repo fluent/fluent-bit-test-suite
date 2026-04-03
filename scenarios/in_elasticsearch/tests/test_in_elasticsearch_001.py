@@ -1,4 +1,4 @@
-import http.client, json, os, logging
+import http.client, json, os, logging, time, subprocess
 
 import pytest
 
@@ -9,11 +9,32 @@ from utils.test_service import FluentBitTestService
 logger = logging.getLogger(__name__)
 
 IN_ELASTICSEARCH_PROTOCOL_CONFIGS = {
-    "http1_cleartext": "in_elasticsearch_http1_cleartext.yaml",
-    "http2_cleartext": "in_elasticsearch_http2_cleartext.yaml",
-    "http1_tls": "in_elasticsearch_http1_tls.yaml",
-    "http2_tls": "in_elasticsearch_http2_tls.yaml",
+    False: {
+        "http1_cleartext": "in_elasticsearch_http1_cleartext.yaml",
+        "http2_cleartext": "in_elasticsearch_http2_cleartext.yaml",
+        "http1_tls": "in_elasticsearch_http1_tls.yaml",
+        "http2_tls": "in_elasticsearch_http2_tls.yaml",
+    },
+    True: {
+        "http1_cleartext": "in_elasticsearch_http1_cleartext_workers.yaml",
+        "http2_cleartext": "in_elasticsearch_http2_cleartext_workers.yaml",
+        "http1_tls": "in_elasticsearch_http1_tls_workers.yaml",
+        "http2_tls": "in_elasticsearch_http2_tls_workers.yaml",
+    },
 }
+
+IN_ELASTICSEARCH_SMALL_BUFFER_REGRESSION_CASES = [
+    {
+        "id": "legacy_http1_cleartext",
+        "config_file": "in_elasticsearch_http1_cleartext_small_buffer.yaml",
+        "http_mode": "http1.1",
+    },
+    {
+        "id": "http2_cleartext",
+        "config_file": "in_elasticsearch_http2_cleartext_small_buffer.yaml",
+        "http_mode": "http2-prior-knowledge",
+    },
+]
 
 
 def parse_single_item_response(response_text):
@@ -200,10 +221,13 @@ def test_in_elasticsearch_delete_multiple_documents():
         raise
 
 
+@pytest.mark.parametrize("workers_enabled", [False, True], ids=["single_listener", "workers_4"])
 @pytest.mark.parametrize("case", PROTOCOL_CASES, ids=[case["id"] for case in PROTOCOL_CASES])
-def test_in_elasticsearch_bulk_protocol_matrix(case):
-    service = Service(IN_ELASTICSEARCH_PROTOCOL_CONFIGS[case["config_key"]])
+def test_in_elasticsearch_bulk_protocol_matrix(case, workers_enabled):
+    service = Service(IN_ELASTICSEARCH_PROTOCOL_CONFIGS[workers_enabled][case["config_key"]])
     service.start()
+    if workers_enabled:
+        service.wait_for_log_message("with 4 workers", timeout=10)
 
     scheme = "https" if case["use_tls"] else "http"
     result = run_curl_request(
@@ -245,6 +269,66 @@ def test_in_elasticsearch_rejects_unknown_bulk_operation():
     assert details["status"] == 400
 
 
+@pytest.mark.parametrize(
+    "case",
+    IN_ELASTICSEARCH_SMALL_BUFFER_REGRESSION_CASES,
+    ids=[case["id"] for case in IN_ELASTICSEARCH_SMALL_BUFFER_REGRESSION_CASES],
+)
+def test_in_elasticsearch_bulk_small_status_buffer_does_not_crash(case):
+    service = Service(case["config_file"])
+    service.start()
+
+    trigger_payload = '{"index":{}}\n{}\n{"index":{}}\n{}\n'
+    curl_command = [
+        "curl",
+        "--silent",
+        "--show-error",
+        "--output",
+        "-",
+        "--write-out",
+        "\n__META__%{http_code} %{http_version}",
+        "--max-time",
+        "10",
+        "-X",
+        "POST",
+        "-H",
+        "Content-Type: application/x-ndjson",
+        "--data-binary",
+        "@-",
+    ]
+    if case["http_mode"] == "http2-prior-knowledge":
+        curl_command.append("--http2-prior-knowledge")
+    else:
+        curl_command.append("--http1.1")
+
+    curl_command.append(f"http://localhost:{service.flb_listener_port}/_bulk")
+
+    curl_result = subprocess.run(
+        curl_command,
+        input=trigger_payload.encode(),
+        capture_output=True,
+        check=False,
+    )
+
+    assert service.flb.process is not None
+    assert service.flb.process.poll() is None
+
+    health_result = run_curl_request(
+        f"http://localhost:{service.flb_listener_port}/_nodes/http",
+        None,
+        method="GET",
+        http_mode="http1.1",
+    )
+
+    service.stop()
+
+    # The regression condition is process termination from a reachable double-free.
+    # Response formatting can still vary under constrained buffer settings, but the
+    # parser must not take down the process.
+    assert curl_result.returncode in {0, 56}
+    assert health_result["status_code"] == 200
+
+
 class Service:
     def __init__(self, config_file):
         # Compose the absolute path for the Fluent Bit configuration file
@@ -267,6 +351,16 @@ class Service:
         self.service.start()
         self.flb = self.service.flb
         self.flb_listener_port = self.service.flb_listener_port
+
+    def wait_for_log_message(self, pattern, timeout=10, interval=0.25):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.flb and self.flb.log_file and os.path.exists(self.flb.log_file):
+                with open(self.flb.log_file, "r", encoding="utf-8", errors="replace") as log_file:
+                    if pattern in log_file.read():
+                        return True
+            time.sleep(interval)
+        raise TimeoutError(f"Timed out waiting for log pattern: {pattern}")
         self.test_suite_http_port = self.service.test_suite_http_port
         logger.info(f"Fluent Bit listener port: {self.flb_listener_port}")
         logger.info(f"test suite http port: {self.test_suite_http_port}")
