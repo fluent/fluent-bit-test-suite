@@ -16,11 +16,12 @@
 
 import json
 import logging
+import gzip
 import threading
 import time
 
 from flask import Flask, request, jsonify, Response
-from waitress import serve
+from werkzeug.serving import make_server
 
 app = Flask(__name__)
 data_storage = {"payloads": [], "requests": []}
@@ -50,11 +51,13 @@ oauth_token_response = {
 }
 logger = logging.getLogger(__name__)
 server_thread = None
+server_instances = []
 
 
 def reset_http_server_state():
     data_storage["payloads"] = []
     data_storage["requests"] = []
+    server_instances.clear()
     response_config.update(
         {
             "status_code": 200,
@@ -109,22 +112,48 @@ def _build_response():
 
 
 def _record_request():
-    data = request.get_json(silent=True)
-    raw_data = request.get_data(cache=True).decode("utf-8", errors="replace")
+    raw_payload = request.get_data(cache=True)
+    decoded_payload = _decode_payload(raw_payload)
+    data = _decode_json_payload(decoded_payload)
+    raw_data = raw_payload.decode("utf-8", errors="replace")
+    decoded_data = decoded_payload.decode("utf-8", errors="replace")
+
     data_storage["payloads"].append(data)
     data_storage["requests"].append(
         {
             "path": request.path,
+            "query_string": request.query_string.decode("utf-8", errors="replace"),
             "method": request.method,
             "headers": dict(request.headers),
             "raw_data": raw_data,
+            "decoded_data": decoded_data,
             "json": data,
         }
     )
 
 
+def _decode_payload(raw_payload):
+    if request.headers.get("Content-Encoding", "").lower() == "gzip":
+        return gzip.decompress(raw_payload)
+
+    return raw_payload
+
+
+def _decode_json_payload(decoded_payload):
+    if not decoded_payload:
+        return None
+
+    try:
+        return json.loads(decoded_payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
 @app.route('/data', methods=['POST'])
-def receive_data():
+@app.route('/shared', methods=['POST'])
+@app.route('/solo', methods=['POST'])
+@app.route('/dataCollectionRules/<path:subpath>', methods=['POST'])
+def receive_data(subpath=None):
     _record_request()
     return _build_response()
 
@@ -156,18 +185,38 @@ def ping():
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
     logger.info("HTTP server shutdown requested")
+    for server_instance in list(server_instances):
+        threading.Thread(target=server_instance.shutdown, daemon=True).start()
     return jsonify({"status": "shutting down"}), 200
 
 
-def run_server(port=60000):
-    serve(app, host='0.0.0.0', port=port, threads=1)
+def run_server(port=60000, *, use_tls=False, tls_crt_file=None, tls_key_file=None):
+    ssl_context = None
+    if use_tls:
+        ssl_context = (tls_crt_file, tls_key_file)
+
+    server_instance = make_server("0.0.0.0", port, app, ssl_context=ssl_context)
+    server_instances.append(server_instance)
+    server_instance.serve_forever()
 
 
-def http_server_run(port=60000):
+def http_server_run(port=60000, *, use_tls=False, tls_crt_file=None, tls_key_file=None,
+                    reset_state=True):
     global server_thread
 
-    reset_http_server_state()
+    if reset_state:
+        reset_http_server_state()
+
     logger.info("Starting HTTP server on port %s", port)
-    server_thread = threading.Thread(target=run_server, kwargs={"port": port}, daemon=True)
+    server_thread = threading.Thread(
+        target=run_server,
+        kwargs={
+            "port": port,
+            "use_tls": use_tls,
+            "tls_crt_file": tls_crt_file,
+            "tls_key_file": tls_key_file,
+        },
+        daemon=True,
+    )
     server_thread.start()
     return server_thread
